@@ -1,0 +1,1 @@
+python -m ner.bert_ner.albert_ner --do_eval --data_dir data/ --bert_model data/model/albert --max_seq_length 50 --train_batch_size 5 --eval_batch_size 3 --learning_rate 5e-5 --num_train_epochs 1 --output_dir c:/code/ner/output/ --save_checkpoints

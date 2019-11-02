@@ -1,0 +1,4 @@
+python-crfsuite
+torch
+transformers
+tqdm

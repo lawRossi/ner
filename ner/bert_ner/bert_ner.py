@@ -303,7 +303,6 @@ class BertNerTagger(NerTagger):
         logits = self.model(input_ids, attention_mask=input_mask, token_type_ids=segment_ids)[0]
         logits = logits.detach().cpu().numpy()
         seq_lens = input_mask.cpu().numpy().sum(axis=1)
-        print(seq_lens)
         label_list = self.data_processor.get_labels()
         preds = self.collect_labels(logits, seq_lens, label_list)
         return preds

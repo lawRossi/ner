@@ -156,7 +156,7 @@ class FeatureConverter():
 class BertFeatureConverter(FeatureConverter): 
     def convert_examples_to_features(self, examples, label_list):
         """Loads a data file into a list of `InputBatch`s."""
-        logger.info("labels: %s" % " ".join(label_list))
+        # logger.info("labels: %s" % " ".join(label_list))
         label_map = {label: i + 1 for i, label in enumerate(label_list)}  # 0 reserved for padding
 
         features = []
@@ -164,7 +164,7 @@ class BertFeatureConverter(FeatureConverter):
             tokens_a = self.tokenizer.tokenize(example.text_a)
             # Account for [CLS] and [SEP] with "- 2"
             if len(tokens_a) > self.max_seq_len - 2:
-                logger.warning("sequence to0 long")
+                logger.warning("sequence too long")
                 tokens_a = tokens_a[:(self.max_seq_len - 2)]
 
             # The convention in BERT is:

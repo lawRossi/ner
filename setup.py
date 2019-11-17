@@ -2,16 +2,17 @@
 @Author: Rossi
 2016-02-01
 """
-from os.path import dirname, join
+import os.path
 from setuptools import setup, find_packages
 
+dependency_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
 
-with open("requrements.txt") as fi:
+with open(dependency_file) as fi:
     dependencies = [line.strip() for line in fi]
 
 
 setup(
-    name="ner",
+    name="bert_ner",
     version="0.1",
     description="named entity recognition tool",
     author="Rossi",

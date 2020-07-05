@@ -10,15 +10,26 @@ def load(path):
 def augment(sample, lookup_tables, aug_num):
     p = re.compile("\[(?P<word>.+?)\]\((?P<type>.+?)\)")
     new_samples = []
-    for match in p.finditer(sample):
-        type_ = match.group("type")
-        word = match.group("word")
-        choices = random.sample(lookup_tables[type_], k=aug_num)
-        word in choices and choices.remove(word)
-        for choice in choices:
-            repstr = f"[{choice}]({type_})"
-            new_sample = sample.replace(sample[match.start():match.end()], repstr)
-            new_samples.append(new_sample)
+    for _ in range(aug_num):
+        replacements = []
+        for match in p.finditer(sample):
+            type_ = match.group("type")
+            word = match.group("word")
+            choice = random.choice(lookup_tables[type_])
+            if choice != word:
+                replacements.append((match, choice, type_))
+        current_index = 0
+        new_sample = []
+        for replacement in replacements:
+            match, word, type_ = replacement
+            while current_index < match.start():
+                new_sample.append(sample[current_index])
+                current_index += 1
+            repstr = f"[{word}]({type_})"
+            new_sample.extend(repstr)
+            current_index += (match.end() - match.start())
+        new_sample.extend(sample[current_index:])
+        new_samples.append("".join(new_sample))
     return new_samples
 
 

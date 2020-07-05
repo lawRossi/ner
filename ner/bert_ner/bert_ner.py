@@ -9,7 +9,7 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 from transformers.modeling_bert import BertForTokenClassification, BertConfig
-from transformers.optimization import AdamW, WarmupLinearSchedule
+from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 from ..ner_evaluate import evaluate
 import argparse
 from tensorboardX import SummaryWriter
@@ -42,8 +42,6 @@ class BertNerTagger(NerTagger):
         logger = logging.getLogger(__name__)
         logger.info("**** Running training ***")
         logger.info(" batch size = %d", args.train_batch_size)
-        
-        label_list = self.data_processor.get_labels()
 
         model.train()
 
@@ -171,7 +169,7 @@ class BertNerTagger(NerTagger):
         ]
         optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon, correct_bias=False)
         warmup_steps = int(args.warmup_proportion * args.num_train_optimization_steps)
-        scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=args.num_train_optimization_steps)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=args.num_train_optimization_steps)
         return optimizer, scheduler
 
     def initialize_model(self, args):
@@ -197,7 +195,7 @@ class BertNerTagger(NerTagger):
 
         model.eval()
         
-        eval_loss, eval_accuracy = 0, 0
+        eval_loss = 0
         nb_eval_steps, nb_eval_examples = 0, 0
         all_preds = []
         all_true_labels = []

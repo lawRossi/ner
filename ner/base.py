@@ -34,31 +34,33 @@ class NerTagger():
         type_ = None
         for i, (chr, tag) in enumerate(zip(text, tags)):
             if tag == 'O':
-                if ne:
-                    nes.append(("".join(ne), type_, (start, i)))
-                    ne = []
+                ne, type_ = self.handle_current_entity(nes, ne, start, i, type_)
             elif tag.startswith('S'):
-                if ne:
-                    nes.append(("".join(ne), type_, (start, i)))
+                ne, type_ = self.handle_current_entity(nes, ne, start, i, type_)
                 start = i
                 type_ = tag[2:]
-                ne = [chr]
+                ne.append(chr)
             elif tag.startswith('B'):
-                if ne:
-                    nes.append(("".join(ne), type_, (start, i)))
+                ne, type_ = self.handle_current_entity(nes, ne, start, i, type_)
                 start = i
                 type_ = tag[2:]
-                ne = [chr]
+                ne.append(chr)
             elif tag.startswith('E'):
                 ne.append(chr)
-                nes.append(("".join(ne), type_, (start, i+1)))
-                ne = []
+                ne, type_ = self.handle_current_entity(nes, ne, start, i+1, type_)
             else:
                 ne.append(chr)
-        if ne:
+        if ne and type_ is not None:
             nes.append(("".join(ne), type_, (start, len(text))))
         return nes
-    
+
+    def handle_current_entity(self, nes, ne, start, end, type_):
+        if ne and type_ is not None:
+            nes.append(("".join(ne), type_, (start, end)))
+        ne = []
+        type_ = None
+        return ne, type_
+
     def save_checkpoint(self, model_dir, args=None):
         checkpoint = f"checkpoint_{int(time.time())}"
         checkpoint_dir = os.path.join(model_dir, checkpoint)

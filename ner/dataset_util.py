@@ -1,3 +1,4 @@
+from collections import defaultdict
 from transformers import BertTokenizer
 import logging
 import os
@@ -11,10 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class WhitespaceTokenizer(BertTokenizer):
-    # def __init__(self, vocab_file, do_lower_case=True, max_len=None, do_basic_tokenize=True,
-    #              never_split=("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]")):
-    #     super().__init__(vocab_file, do_lower_case, max_len, do_basic_tokenize, never_split)
-    #     self.do_lower_case = do_lower_case
     def __init__(self, vocab_file, do_lower_case=True, do_basic_tokenize=True, never_split=None,
                  unk_token="[UNK]", sep_token="[SEP]", pad_token="[PAD]", cls_token="[CLS]",
                  mask_token="[MASK]", tokenize_chinese_chars=True, **kwargs):
@@ -34,6 +31,11 @@ class WhitespaceTokenizer(BertTokenizer):
             return token
         else:
             return "[UNK]"
+
+
+class CharTokenizer:
+    def tokenize(self, text):
+        return [chr for chr in text]
 
 
 class InputExample(object):
@@ -167,24 +169,6 @@ class BertFeatureConverter(FeatureConverter):
                 logger.warning("sequence too long")
                 tokens_a = tokens_a[:(self.max_seq_len - 2)]
 
-            # The convention in BERT is:
-            # (a) For sequence pairs:
-            #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-            #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
-            # (b) For single sequences:
-            #  tokens:   [CLS] the dog is hairy . [SEP]
-            #  type_ids: 0   0   0   0  0     0 0
-            #
-            # Where "type_ids" are used to indicate whether this is the first
-            # sequence or the second sequence. The embedding vectors for `type=0` and
-            # `type=1` were learned during pre-training and are added to the wordpiece
-            # embedding vector (and position vector). This is not *strictly* necessary
-            # since the [SEP] token unambigiously separates the sequences, but it makes
-            # it easier for the model to learn the concept of sequences.
-            #
-            # For classification tasks, the first vector (corresponding to [CLS]) is
-            # used as as the "sentence vector". Note that this only makes sense because
-            # the entire model is fine-tuned.
             tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
             segment_ids = [0] * len(tokens)
             input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
@@ -213,24 +197,44 @@ class BertFeatureConverter(FeatureConverter):
             if label_ids:
                 assert len(label_ids) == self.max_seq_len
 
-            # if ex_index < 3:
-            #     logger.info("*** Example ***")
-            #     logger.info("guid: %s" % (example.guid))
-            #     logger.info("tokens: %s" % " ".join(
-            #             [str(x) for x in tokens]))
-            #     logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-            #     logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-            #     logger.info(
-            #             "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-            #     if label_ids:
-            #         logger.info("label: %s " % " ".join([str(x) for x in label_ids]))
-
             features.append(
                     InputFeatures(input_ids=input_ids,
                                 input_mask=input_mask,
                                 segment_ids=segment_ids,
                                 label_ids=label_ids))
         return features
+
+
+class TextConverter(FeatureConverter):
+    def __init__(self, tokenizer, max_seq_len, vocab=None, label_vocab=None):
+        super().__init__(tokenizer, max_seq_len=max_seq_len)
+        self.vocab = vocab
+        self.label_vocab = label_vocab
+    
+    def convert_examples_to_features(self, examples, label_list):
+        features = []
+        for example in examples:
+            tokens = self.tokenizer.tokenize(example.text_a)
+            token_idxes = [self.vocab.get(token, len(self.vocab)+1) for token in tokens]
+            if example.label:
+                labels = example.label
+                label_idxes = [self.label_vocab[label] for label in labels]
+                token_idxes = token_idxes[:self.max_seq_len] + [0] * (self.max_seq_len - len(token_idxes))
+                label_idxes = label_idxes[:self.max_seq_len] + [self.padding_label_idx] * (self.max_seq_len - len(label_idxes))
+            else:
+                label_idxes = None
+            feature = InputFeatures(token_idxes, None, None, label_idxes)
+            features.append(feature)
+        return features
+
+    def build_vocabulary(self, examples, label_list):
+        all_words = set()
+        for example in examples:
+            tokens = self.tokenizer.tokenize(example.text_a)
+            all_words.update(tokens)
+        self.vocab = {word: i + 1 for i, word in enumerate(all_words)}
+        self.label_vocab = {label: i for i, label in enumerate(label_list)}
+        self.padding_label_idx = self.label_vocab["O"]
 
 
 def find_class(import_path):

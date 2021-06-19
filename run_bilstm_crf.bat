@@ -1,0 +1,1 @@
+python3 -m ner.bilstm_crf.bilstm_crf_ner --do_eval --data_dir data/ --max_seq_length 50 --batch_size 8 --learning_rate 5e-5 --num_train_epochs 10 --output_dir /data/ner/output

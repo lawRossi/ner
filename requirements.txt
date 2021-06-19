@@ -1,4 +1,4 @@
 python-crfsuite
-torch
-transformers
+torch==1.2.0
+transformers==2.4.1
 tqdm

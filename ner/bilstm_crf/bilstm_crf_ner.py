@@ -15,7 +15,6 @@ from ..ner_evaluate import evaluate
 class BilstmCrfNerTagger(NerTagger):
     def __init__(self, data_processor, converter):
         super().__init__(data_processor, converter)
-        self.device = device
 
     def train(self, args):
         device = torch.device(args.device)
@@ -246,7 +245,7 @@ def main():
         tagger.train(args)
 
     elif args.do_eval:
-        tagger = BilstmCrfNerTagger.load_model(args.output_dir)
+        tagger = BilstmCrfNerTagger.load_model(args.output_dir, args.device)
         tagger.test(args)
 
 

@@ -1,245 +1,67 @@
-from collections import defaultdict
-from transformers import BertTokenizer
-import logging
-import os
-import importlib
+from typing import Sequence
+import jieba
+from torchtext.vocab import Vocab
+from torchtext import data
+from torchtext.datasets import SequenceTaggingDataset
 
 
-logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                    datefmt = '%m/%d/%Y %H:%M:%S',
-                    level = logging.INFO)
-logger = logging.getLogger(__name__)
+def is_all_chinese(word):
+    for _char in word:
+        if not '\u4e00' <= _char <= '\u9fa5':
+            return False
+    return True
 
 
-class WhitespaceTokenizer(BertTokenizer):
-    def __init__(self, vocab_file, do_lower_case=True, do_basic_tokenize=True, never_split=None,
-                 unk_token="[UNK]", sep_token="[SEP]", pad_token="[PAD]", cls_token="[CLS]",
-                 mask_token="[MASK]", tokenize_chinese_chars=True, **kwargs):
-        super().__init__(vocab_file, do_lower_case, do_basic_tokenize, never_split, unk_token,sep_token,
-        pad_token, cls_token, mask_token, tokenize_chinese_chars, **kwargs)
-        self.do_lower_case = do_lower_case
-
-    def _tokenize(self, text):
-        if self.do_lower_case:
-            text = text.lower()
-        tokens = text.split(" ")
-        tokens = map(self.check_in_vocab, tokens)
-        return list(tokens)
-
-    def check_in_vocab(self, token):
-        if token in self.vocab:
-            return token
+def tokenize(utterance):
+    tokens = jieba.lcut(utterance)
+    flat_tokens = []
+    for token in tokens:
+        if not is_all_chinese(token):
+            flat_tokens.append(token)
         else:
-            return "[UNK]"
+            flat_tokens.extend(token)
+    return flat_tokens
 
 
-class CharTokenizer:
-    def tokenize(self, text):
-        return [chr for chr in text]
+class NERDataset(data.Dataset):
+    @staticmethod
+    def sort_key(example):
+        for attr in dir(example):
+            if not callable(getattr(example, attr)) and \
+                    not attr.startswith("__"):
+                return len(getattr(example, attr))
+        return 0
 
-
-class InputExample(object):
-    """A single training/test example for simple sequence classification."""
-
-    def __init__(self, guid, text_a, label=None):
-        """Constructs a InputExample.
-
-        Args:
-            guid: Unique id for the example.
-            text_a: string. The untokenized text of the first sequence. For single
-            sequence tasks, only this sequence must be specified.
-            text_b: (Optional) string. The untokenized text of the second sequence.
-            Only must be specified for sequence pair tasks.
-            label: (Optional) string. The label of the example. This should be
-            specified for train and dev examples, but not for test examples.
-        """
-        self.guid = guid
-        self.text_a = text_a
-        self.label = label
-
-
-class InputFeatures(object):
-    """A single set of features of data."""
-
-    def __init__(self, input_ids, input_mask, segment_ids, label_ids):
-        self.input_ids = input_ids
-        self.input_mask = input_mask
-        self.segment_ids = segment_ids
-        self.label_ids = label_ids
-
-
-class DataProcessor:
-    """Base class for data converters for sequence classification data sets."""
-
-    def __init__(self, labels=None):
-        self.labels = labels
-
-    def get_train_examples(self, data_dir):
-        """Gets a collection of `InputExample`s for the train set."""
-        raise NotImplementedError()
-
-    def get_dev_examples(self, data_dir):
-        """Gets a collection of `InputExample`s for the dev set."""
-        raise NotImplementedError()
-
-    def get_labels(self):
-        """Gets the list of labels for this data set."""
-        raise NotImplementedError()
-
-
-class ConllProcessor(DataProcessor):
-    """Processor for the NER model."""
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "train.txt")))
-        return self._create_examples(
-            self._read_file(os.path.join(data_dir, "train.txt")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_file(os.path.join(data_dir, "dev.txt")), "dev")
-
-    def get_labels(self):
-        """See base class."""
-        return list(sorted(self.labels))
-
-    def _read_file(self, path):
-        samples = []
-        with open(path, encoding="utf-8") as fi:
-            text = []
-            tags = []
-            for line in fi:
-                line = line.strip()
-                if line.startswith("-DOCSTART- "):
-                    if text:
-                        samples.append((" ".join(text), tags))
-                        text = []
-                        tags = []
-                elif line:
-                    splits = line.split("\t")
-                    text.append(splits[0])
-                    tags.append(splits[-1])
-                else:
-                    if text:
-                        samples.append((" ".join(text), tags))
-                        text = []
-                        tags = []
-            if text:  # the last document
-                samples.append((" ".join(text), tags))
-        return samples
-
-    def _create_examples(self, samples, set_type):
-        """Creates examples for the training and dev sets."""
-        if self.labels is None:
-            self.labels = set()
+    def __init__(self, path, fields, encoding="utf-8", separator="\t", **kwargs):
         examples = []
-        for (i, (text, tags)) in enumerate(samples):
-            guid = "%s-%s" % (set_type, i)
-            text_a = text
-            labels = tags
-            if set_type == "train":
-                self.labels = self.labels.union(tags)
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, label=labels))
-        return examples
+        columns = []
+
+        with open(path, encoding=encoding) as input_file:
+            for line in input_file:
+                line = line.rstrip()
+                if line == "":
+                    if columns:
+                        examples.append(data.Example.fromlist(columns, fields))
+                    columns = []
+                else:
+                    for i, column in enumerate(line.split(separator)):
+                        if len(columns) < i + 1:
+                            columns.append([])
+                        columns[i].append(column)
+
+            if columns:
+                examples.append(data.Example.fromlist(columns, fields))
+        super().__init__(examples, fields, **kwargs)
 
 
-class FeatureConverter():
-    def __init__(self, tokenizer, max_seq_len=120):
-        self.tokenizer = tokenizer
-        self.max_seq_len = max_seq_len
+def load_datasets(train_file, dev_file):
+    Token = data.Field(lower=True, batch_first=True)
+    Tag = data.Field(batch_first=True)
+    fileds = [("Token", Token), ("Tag", Tag)]
 
-    def convert_examples_to_features(self, examples, label_list):
-        raise NotImplementedError
+    train_dataset = NERDataset(train_file, fileds)
+    dev_dataset = NERDataset(dev_file, fileds)
 
-
-class BertFeatureConverter(FeatureConverter): 
-    def convert_examples_to_features(self, examples, label_list):
-        """Loads a data file into a list of `InputBatch`s."""
-        # logger.info("labels: %s" % " ".join(label_list))
-        label_map = {label: i + 1 for i, label in enumerate(label_list)}  # 0 reserved for padding
-
-        features = []
-        for (ex_index, example) in enumerate(examples):
-            tokens_a = self.tokenizer.tokenize(example.text_a)
-            # Account for [CLS] and [SEP] with "- 2"
-            if len(tokens_a) > self.max_seq_len - 2:
-                logger.warning("sequence too long")
-                tokens_a = tokens_a[:(self.max_seq_len - 2)]
-
-            tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-            segment_ids = [0] * len(tokens)
-            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-            label_ids = None
-            if example.label:
-                label_ids = [0] + [label_map[item] for item in example.label] + [0]
-                if len(input_ids) != len(label_ids):
-                    logger.warning("tokenization error")
-                    continue
-
-            # The mask has 1 for real tokens and 0 for padding tokens. Only real
-            # tokens are attended to.
-            input_mask = [1] * len(input_ids)
-
-            # Zero-pad up to the sequence length.
-            padding = [0] * (self.max_seq_len - len(input_ids))
-            input_ids += padding
-            input_mask += padding
-            segment_ids += padding
-            if label_ids:
-                label_ids += padding
-
-            assert len(input_ids) == self.max_seq_len
-            assert len(input_mask) == self.max_seq_len
-            assert len(segment_ids) == self.max_seq_len
-            if label_ids:
-                assert len(label_ids) == self.max_seq_len
-
-            features.append(
-                    InputFeatures(input_ids=input_ids,
-                                input_mask=input_mask,
-                                segment_ids=segment_ids,
-                                label_ids=label_ids))
-        return features
-
-
-class TextConverter(FeatureConverter):
-    def __init__(self, tokenizer, max_seq_len, vocab=None, label_vocab=None):
-        super().__init__(tokenizer, max_seq_len=max_seq_len)
-        self.vocab = vocab
-        self.label_vocab = label_vocab
-    
-    def convert_examples_to_features(self, examples, label_list):
-        features = []
-        for example in examples:
-            tokens = self.tokenizer.tokenize(example.text_a)
-            token_idxes = [self.vocab.get(token, len(self.vocab)+1) for token in tokens]
-            if example.label:
-                labels = example.label
-                label_idxes = [self.label_vocab[label] for label in labels]
-                token_idxes = token_idxes[:self.max_seq_len] + [0] * (self.max_seq_len - len(token_idxes))
-                label_idxes = label_idxes[:self.max_seq_len] + [self.padding_label_idx] * (self.max_seq_len - len(label_idxes))
-            else:
-                label_idxes = None
-            feature = InputFeatures(token_idxes, None, None, label_idxes)
-            features.append(feature)
-        return features
-
-    def build_vocabulary(self, examples, label_list):
-        all_words = set()
-        for example in examples:
-            tokens = self.tokenizer.tokenize(example.text_a)
-            all_words.update(tokens)
-        self.vocab = {word: i + 1 for i, word in enumerate(all_words)}
-        self.label_vocab = {label: i for i, label in enumerate(label_list)}
-        self.padding_label_idx = self.label_vocab["O"]
-
-
-def find_class(import_path):
-    module = import_path[:import_path.rfind(".")]
-    class_name = import_path[import_path.rfind(".")+1:]
-    ip_module = importlib.import_module(".", module)
-    class_ = getattr(ip_module, class_name)
-    return class_
+    Token.build_vocab(train_dataset)
+    Tag.build_vocab(train_dataset)
+    return train_dataset, dev_dataset

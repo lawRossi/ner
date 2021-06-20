@@ -65,8 +65,8 @@ def evaluate(true_tags, pred_tags):
     pred_tags = chain.from_iterable(pred_tags)
 
     for true_tag, pred_tag in zip(true_tags, pred_tags):
-        guessed, guessed_type = parse_tag(true_tag)
-        correct, correct_type = parse_tag(pred_tag)
+        correct, correct_type = parse_tag(true_tag)
+        guessed, guessed_type = parse_tag(pred_tag)
 
         end_correct = end_of_chunk(last_correct, correct,
                                    last_correct_type, correct_type)

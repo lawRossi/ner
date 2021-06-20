@@ -66,7 +66,7 @@ class BilstmCrfNerTagger(NerTagger):
         self.converter.build_vocabulary(examples, label_list)
         features = self.converter.convert_examples_to_features(examples, label_list)
         self.model.to(device)
-
+        self.model.eval()
         all_input_ids = torch.tensor([feature.input_ids for feature in features])
         all_labels = torch.tensor([feature.label_ids for feature in features])
         dataset = TensorDataset(all_input_ids, all_labels)
@@ -85,6 +85,7 @@ class BilstmCrfNerTagger(NerTagger):
         evaluate(all_true_labels, all_pred_labels)
 
     def predict_batch(self, texts):
+        self.model.eval()
         examples = [InputExample(guid=None, text_a=text) for text in texts]
         label_list = self.data_processor.get_labels()
         features = self.converter.convert_examples_to_features(examples, label_list)
@@ -109,9 +110,9 @@ class BilstmCrfNerTagger(NerTagger):
         converter = TextConverter(tokenizer, args.max_seq_length, vocab, label_vocab)
         model_path = os.path.join(model_dir, "bilstm_crf.pt")
         model = torch.load(model_path, map_location=device)
-        model.eval()
         tagger= cls(data_processor, converter)
         tagger.model = model
+        tagger.eval()
         return tagger
 
 

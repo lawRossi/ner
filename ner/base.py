@@ -1,23 +1,7 @@
-import os
-import time
-
-
 class NerTagger():
-    def __init__(self, data_processor, converter):
-        self.data_processor = data_processor
-        self.converter = converter
-    
-    def train(self, args):
-        raise NotImplementedError
-
-    def test(self, args):
-        raise NotImplementedError
 
     @classmethod
     def load_model(cls, model_dir):
-        raise NotImplementedError
-    
-    def save_model(self, model_dir, args=None):
         raise NotImplementedError
     
     def predict(self, text):
@@ -60,9 +44,3 @@ class NerTagger():
         ne = []
         type_ = None
         return ne, type_
-
-    def save_checkpoint(self, model_dir, args=None):
-        checkpoint = f"checkpoint_{int(time.time())}"
-        checkpoint_dir = os.path.join(model_dir, checkpoint)
-        os.makedirs(checkpoint_dir)
-        self.save_model(checkpoint_dir, args)

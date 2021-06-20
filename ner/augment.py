@@ -49,8 +49,9 @@ def generate_augment_data(source_path, save_path, lookup_paths, aug_num=3):
 
 if __name__ == "__main__":
     lookup_paths = {
-        "player": "../data/player.txt",
-        "team": "../data/team.txt",
-        "league": "../data/league.txt"
+        "player": "data/players.txt",
+        "team": "data/teams.txt",
+        "league": "data/leagues.txt"
     }
-    generate_augment_data("../data/test.md", "../data/aug.md", lookup_paths, 2)
+    # generate_augment_data("data/train.md", "data/aug_train.md", lookup_paths, 5)
+    generate_augment_data("data/dev.md", "data/aug_dev.md", lookup_paths, 5)

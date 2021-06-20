@@ -141,7 +141,7 @@ def main():
         vocab_size = len(Token.vocab)
         num_tags = len(Tag.vocab)
         padding_idx = Token.vocab.stoi["<pad>"]
-        model = BilstmCrfModel(vocab_size, args.emb_dims, args.hidden_dims, num_tags, padding_idx)
+        model = BilstmCrfModel(vocab_size, args.emb_dims, args.hidden_dims, num_tags, padding_idx, args.dropout)
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
         model.to(args.device)
         train(model, train_data, optimizer, args)

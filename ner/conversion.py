@@ -1,6 +1,4 @@
 # -*- coding:utf-8 -*-
-from itertools import groupby
-from operator import itemgetter
 import codecs
 import re
 
@@ -166,6 +164,7 @@ def conll2markdown(source_path, save_path):
 
 
 if __name__ == '__main__':
-    markdown2conll("../data/test.md", "../data/test.conll")
+    markdown2conll("data/aug_train.md", "data/train.txt")
+    markdown2conll("data/aug_dev.md", "data/dev.txt")
     # conll2ann("../data/test.conll", "../data/test")
     # conll2markdown("../data/test.conll", "../data/test.markdown")

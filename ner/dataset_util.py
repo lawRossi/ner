@@ -1,26 +1,8 @@
-from typing import Sequence
-import jieba
-from torchtext.vocab import Vocab
 from torchtext import data
-from torchtext.datasets import SequenceTaggingDataset
 
 
-def is_all_chinese(word):
-    for _char in word:
-        if not '\u4e00' <= _char <= '\u9fa5':
-            return False
-    return True
-
-
-def tokenize(utterance):
-    tokens = jieba.lcut(utterance)
-    flat_tokens = []
-    for token in tokens:
-        if not is_all_chinese(token):
-            flat_tokens.append(token)
-        else:
-            flat_tokens.extend(token)
-    return flat_tokens
+def tokenize(text):
+    return list(text)
 
 
 class NERDataset(data.Dataset):
@@ -55,10 +37,10 @@ class NERDataset(data.Dataset):
 
 
 def load_datasets(train_file, dev_file):
-    Token = data.Field(lower=True, batch_first=True)
+    Token = data.Field(batch_first=True, tokenize=tokenize)
     Tag = data.Field(batch_first=True)
-    fileds = [("Token", Token), ("Tag", Tag)]
 
+    fileds = [("Token", Token), ("Tag", Tag)]
     train_dataset = NERDataset(train_file, fileds)
     dev_dataset = NERDataset(dev_file, fileds)
 

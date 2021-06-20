@@ -7,6 +7,8 @@ from torch.optim import Adam
 import tqdm
 import torch
 from ..ner_evaluate import evaluate
+import json
+import pickle
 
 
 def prepare_parser():
@@ -78,7 +80,8 @@ def prepare_parser():
     return parser
 
 
-def train(model, data_iter, optimizer, args):
+def train(model, train_data, optimizer, args):
+    data_iter = data.BucketIterator(train_data, args.batch_size, shuffle=True, device=args.device)
     for _ in tqdm.trange(args.num_train_epochs):
         model.train()
         total_loss = 0
@@ -96,6 +99,14 @@ def train(model, data_iter, optimizer, args):
                 total_loss = 0
     model_path = os.path.join(args.output_dir, "bilstm_crf.pt")
     torch.save(model, model_path)
+    with open(os.path.join(args.output_dir, "Token.pkl"), "wb") as fo:
+        pickle.dump(train_data.fields.get("Token"), fo)
+    tag_vocab = train_data.fields.get("Tag").vocab
+    tag_map = {i: tag for i, tag in enumerate(tag_vocab.itos)}
+    tag_map[tag_vocab.stoi["<unk>"]] = "O"
+    tag_map[tag_vocab.stoi["<pad>"]] = "O"
+    with open(os.path.join(args.output_dir, "label_vocab.json"), "w", encoding="utf-8") as fo:
+        json.dump(tag_map, fo)
 
 
 def test(model, eval_data, args):
@@ -132,9 +143,8 @@ def main():
         padding_idx = Token.vocab.stoi["<pad>"]
         model = BilstmCrfModel(vocab_size, args.emb_dims, args.hidden_dims, num_tags, padding_idx)
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
-        train_iter = data.BucketIterator(train_data, args.batch_size, shuffle=True, device=args.device)
         model.to(args.device)
-        train(model, train_iter, optimizer, args)
+        train(model, train_data, optimizer, args)
     if args.do_eval:
         model_path = os.path.join(args.output_dir, "bilstm_crf.pt")
         model = torch.load(model_path, map_location=args.device)

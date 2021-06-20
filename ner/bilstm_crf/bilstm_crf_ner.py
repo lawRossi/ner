@@ -1,46 +1,37 @@
+import pickle
 from ..base import NerTagger
 import torch
 import torch.nn as nn
 from torchcrf import CRF
-import tqdm
-from torch.optim import Adam
 import os.path
 import json
 
 
 class BilstmCrfNerTagger(NerTagger):
-    def __init__(self, data_processor, converter):
-        super().__init__(data_processor, converter)
+    def __init__(self, model, Token, label_vocab, device) -> None:
+        super().__init__()
+        self.model = model
+        self.Token = Token
+        self.label_vocab = label_vocab
+        self.device = device
 
     def predict_batch(self, texts):
-        self.model.eval()
-        examples = [InputExample(guid=None, text_a=text) for text in texts]
-        label_list = self.data_processor.get_labels()
-        features = self.converter.convert_examples_to_features(examples, label_list)
-        all_input_ids = torch.tensor([feature.input_ids for feature in features])
-        tags_idxes = self.model(all_input_ids)
-        tags = [[label_list[idx] for idx in idxes] for idxes in tags_idxes]
+        examples = [self.Token.preprocess(text) for text in texts]
+        input_tensors = self.Token.process(examples, device=self.device)
+        tags_list = self.model(input_tensors)
+        tags = [[self.label_vocab[str(tag)] for tag in tags] for tags in tags_list]
         return tags
 
     @classmethod
     def load_model(cls, model_dir, device="cpu"):
-        output_args_file = os.path.join(model_dir, "training_args.bin")
-        args = torch.load(output_args_file)
-        label_file = os.path.join(model_dir, "labels.txt")
-        with open(label_file, encoding="utf-8") as fi:
-            labels = set(fi.read().strip().split("||"))
-        with open(os.path.join(model_dir, "vocab.json"), encoding="utf-8") as fi:
-            vocab = json.load(fi)
-        with open(os.path.join(model_dir, "label_vocab.json"), encoding="utf-8") as fi:
-            label_vocab = json.load(fi)
-        data_processor = ConllProcessor(labels)
-        tokenizer = CharTokenizer()
-        converter = TextConverter(tokenizer, args.max_seq_length, vocab, label_vocab)
         model_path = os.path.join(model_dir, "bilstm_crf.pt")
         model = torch.load(model_path, map_location=device)
-        tagger= cls(data_processor, converter)
-        tagger.model = model
-        tagger.model.eval()
+        model.eval()
+        with open(os.path.join(model_dir, "Token.pkl"), "rb") as fi:
+            Token = pickle.load(fi)
+        with open(os.path.join(model_dir, "label_vocab.json"), encoding="utf-8") as fi:
+            label_vocab = json.load(fi)
+        tagger= cls(model, Token, label_vocab, device)
         return tagger
 
 
@@ -84,6 +75,5 @@ class BilstmCrfModel(nn.Module):
 
 
 if __name__ == "__main__":
-    # main()
     tagger = BilstmCrfNerTagger.load_model("output")
-    print(tagger.predict("你喜欢梅西吗"))
+    print(tagger.recognize_nes("你喜欢梅西吗"))

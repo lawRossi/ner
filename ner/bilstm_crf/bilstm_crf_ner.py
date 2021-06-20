@@ -15,7 +15,7 @@ from ..ner_evaluate import evaluate
 class BilstmCrfNerTagger(NerTagger):
     def __init__(self, data_processor, converter):
         super().__init__(data_processor, converter)
-    
+
     def train(self, args):
         device = torch.device(args.device)
         examples = self.data_processor.get_train_examples(args.data_dir)
@@ -121,7 +121,7 @@ class BilstmCrfModel(nn.Module):
         self.num_labels = num_labels
         self.hidden_dims = hidden_dims
         self.embedding = nn.Embedding(vocab_size, emb_dims, padding_idx=0)
-        self.bilstm = nn.LSTM(emb_dims, hidden_dims//2, num_layers=1, bidirectional=True)
+        self.bilstm = nn.LSTM(emb_dims, hidden_dims//2, num_layers=1, bidirectional=True, batch_first=True)
         self.hidden2tags = nn.Linear(hidden_dims, num_labels)
         self.crf = CRF(num_labels, batch_first=True)
         self.dropout = nn.Dropout(dropout)
@@ -133,21 +133,23 @@ class BilstmCrfModel(nn.Module):
         """
         batch_size = sequences.shape[0]
         embedded = self.dropout(self.embedding(sequences))
-        embedded = embedded.permute(1, 0, 2)
         hidden = self._init_hidden(batch_size)
         lstm_output, hidden = self.bilstm(embedded, hidden)
-        lstm_output = lstm_output.permute(1, 0, 2)
         emissions = self.hidden2tags(self.dropout(lstm_output))
+        mask = self._compute_mask(sequences)
         if labels is not None:
-            log_likelihood = self.crf(emissions, labels)
+            log_likelihood = self.crf(emissions, labels, mask=mask)
             return -log_likelihood
         else:
-            tags = self.crf.decode(emissions)
+            tags = self.crf.decode(emissions, mask=mask)
             return tags
 
+    def _compute_mask(self, sequences):
+        return sequences != 0
+
     def _init_hidden(self, batch_size):
-        return (torch.randn(2, batch_size, self.hidden_dims // 2),
-                torch.randn(2, batch_size, self.hidden_dims // 2))
+        return (torch.zeros(2, batch_size, self.hidden_dims // 2),
+                torch.zeros(2, batch_size, self.hidden_dims // 2))
 
 
 def prepare_parser():
@@ -247,4 +249,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print("??")
     main()

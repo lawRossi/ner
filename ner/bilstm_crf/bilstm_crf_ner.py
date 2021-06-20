@@ -15,6 +15,7 @@ from ..ner_evaluate import evaluate
 class BilstmCrfNerTagger(NerTagger):
     def __init__(self, data_processor, converter):
         super().__init__(data_processor, converter)
+        self.device = device
 
     def train(self, args):
         device = torch.device(args.device)
@@ -94,7 +95,7 @@ class BilstmCrfNerTagger(NerTagger):
         return tags
 
     @classmethod
-    def load_model(cls, model_dir):
+    def load_model(cls, model_dir, device="cpu"):
         output_args_file = os.path.join(model_dir, "training_args.bin")
         args = torch.load(output_args_file)
         label_file = os.path.join(model_dir, "labels.txt")
@@ -108,7 +109,8 @@ class BilstmCrfNerTagger(NerTagger):
         tokenizer = CharTokenizer()
         converter = TextConverter(tokenizer, args.max_seq_length, vocab, label_vocab)
         model_path = os.path.join(model_dir, "bilstm_crf.pt")
-        model = torch.load(model_path)
+        model = torch.load(model_path, map_location=device)
+        model.eval()
         tagger= cls(data_processor, converter)
         tagger.model = model
         return tagger
@@ -249,5 +251,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print("??")
     main()

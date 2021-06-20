@@ -64,7 +64,7 @@ class BilstmCrfModel(nn.Module):
         """
         batch_size = sequences.shape[0]
         embedded = self.dropout(self.embedding(sequences))
-        hidden = self._init_hidden(batch_size)
+        hidden = self._init_hidden(batch_size, sequences.device)
         lstm_output, hidden = self.bilstm(embedded, hidden)
         emissions = self.hidden2tags(self.dropout(lstm_output))
         mask = self._compute_mask(sequences)
@@ -78,9 +78,9 @@ class BilstmCrfModel(nn.Module):
     def _compute_mask(self, sequences):
         return sequences != self.padding_idx
 
-    def _init_hidden(self, batch_size):
-        return (torch.zeros(2, batch_size, self.hidden_dims // 2),
-                torch.zeros(2, batch_size, self.hidden_dims // 2))
+    def _init_hidden(self, batch_size, device):
+        return (torch.zeros(2, batch_size, self.hidden_dims // 2, device=device),
+                torch.zeros(2, batch_size, self.hidden_dims // 2, device=device))
 
 
 if __name__ == "__main__":

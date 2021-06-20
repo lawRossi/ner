@@ -112,7 +112,7 @@ class BilstmCrfNerTagger(NerTagger):
         model = torch.load(model_path, map_location=device)
         tagger= cls(data_processor, converter)
         tagger.model = model
-        tagger.eval()
+        tagger.model.eval()
         return tagger
 
 

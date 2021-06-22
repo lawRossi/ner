@@ -33,6 +33,10 @@ def prepare_parser():
     parser.add_argument("--do_eval",
                         action='store_true',
                         help="Whether to run eval on the dev set.")
+    
+    parser.add_argument("--use_bichar",
+                        action='store_true',
+                        help="Whether to use bichar features.")
 
     parser.add_argument("--batch_size",
                         default=32,
@@ -87,9 +91,10 @@ def train(model, train_data, optimizer, args):
         total_loss = 0
         tbar = tqdm.tqdm(data_iter)
         for i, batch in enumerate(tbar):
-            tokens = batch.Token
+            chars = batch.Char
             tags = batch.Tag
-            loss = model(tokens, tags)
+            bichars = None if not args.use_bichar else batch.BiChar
+            loss = model(chars, tags, bichars)
             loss.backward()
             optimizer.step()
             model.zero_grad()
@@ -99,8 +104,11 @@ def train(model, train_data, optimizer, args):
                 total_loss = 0
     model_path = os.path.join(args.output_dir, "bilstm_crf.pt")
     torch.save(model, model_path)
-    with open(os.path.join(args.output_dir, "Token.pkl"), "wb") as fo:
-        pickle.dump(train_data.fields.get("Token"), fo)
+    with open(os.path.join(args.output_dir, "Char.pkl"), "wb") as fo:
+        pickle.dump(train_data.fields.get("Char"), fo)
+    if args.use_bichar:
+        with open(os.path.join(args.output_dir, "BiChar.pkl"), "wb") as fo:
+            pickle.dump(train_data.fields.get("BiChar"), fo)
     tag_vocab = train_data.fields.get("Tag").vocab
     tag_map = {i: tag for i, tag in enumerate(tag_vocab.itos)}
     tag_map[tag_vocab.stoi["<unk>"]] = "O"
@@ -120,9 +128,10 @@ def test(model, eval_data, args):
     all_pred_labels = []
     all_true_labels = []
     for batch in tbar:
-        tokens = batch.Token
+        chars = batch.Char
+        bichars = None if not args.use_bichar else batch.BiChar
         tags_list = batch.Tag.cpu().numpy()
-        preds_list = model(tokens)
+        preds_list = model(chars, bichars=bichars)
         all_true_labels.extend([[tag_map[tag] for tag in tags if tag != tag_vocab.stoi["<pad>"]] for tags in tags_list])
         all_pred_labels.extend([[tag_map[pred] for pred in preds] for preds in preds_list])
     evaluate(all_true_labels, all_pred_labels)
@@ -134,14 +143,20 @@ def main():
     data_dir = args.data_dir
     train_file = os.path.join(data_dir, "train.txt")
     dev_file = os.path.join(data_dir, "dev.txt")
-    train_data, dev_data = load_datasets(train_file, dev_file)
+    train_data, dev_data = load_datasets(train_file, dev_file, use_bichar=args.use_bichar)
     if args.do_train:
-        Token = train_data.fields.get("Token")
+        Char = train_data.fields.get("Char")
+        if args.use_bichar:
+            BiChar = train_data.fields.get("BiChar")
+            bichar_vocab_size = len(BiChar.vocab)
+        else:
+            bichar_vocab_size = 0
         Tag = train_data.fields.get("Tag")
-        vocab_size = len(Token.vocab)
+        vocab_size = len(Char.vocab)
         num_tags = len(Tag.vocab)
-        padding_idx = Token.vocab.stoi["<pad>"]
-        model = BilstmCrfModel(vocab_size, args.emb_dims, args.hidden_dims, num_tags, padding_idx, args.dropout)
+        padding_idx = Char.vocab.stoi["<pad>"]
+        model = BilstmCrfModel(vocab_size, args.emb_dims, args.hidden_dims, num_tags, padding_idx, 
+            args.dropout, args.use_bichar, bichar_vocab_size)
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
         model.to(args.device)
         train(model, train_data, optimizer, args)

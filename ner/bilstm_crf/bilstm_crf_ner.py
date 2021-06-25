@@ -1,3 +1,4 @@
+from ner.dataset_util import AcTokenizer
 import pickle
 from ..base import NerTagger
 import torch
@@ -51,6 +52,8 @@ class BilstmCrfNerTagger(NerTagger):
         if os.path.exists(lex_file):
             with open(lex_file, "rb") as fi:
                 Lexicon = pickle.load(fi)
+            args = torch.load(os.path.join(model_dir, "args.pkl"))
+            Lexicon.tokenize = AcTokenizer(args.dict_file)
         else:
             Lexicon = None
         with open(os.path.join(model_dir, "label_vocab.json"), encoding="utf-8") as fi:

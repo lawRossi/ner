@@ -115,6 +115,9 @@ def train(model, train_data, optimizer, args):
     if args.use_bichar:
         with open(os.path.join(args.output_dir, "BiChar.pkl"), "wb") as fo:
             pickle.dump(train_data.fields.get("BiChar"), fo)
+    if args.dict_file is not None:
+        with open(os.path.join(args.output_dir, "Lexicon.pkl"), "wb") as fo:
+            pickle.dump(train_data.fields.get("Lexicon"), fo)
     tag_vocab = train_data.fields.get("Tag").vocab
     tag_map = {i: tag for i, tag in enumerate(tag_vocab.itos)}
     tag_map[tag_vocab.stoi["<pad>"]] = "O"

@@ -26,11 +26,13 @@ def build_automaton(dict_file):
     return automaton
 
 
-def build_ac_tokenizer(dict_file):
-    automaton = build_automaton(dict_file)
-    def tokenize(text):
+class AcTokenizer:
+    def __init__(self, dict_file):
+        self.automaton = build_automaton(dict_file)
+
+    def __call__(self, text):
         tags = [[] for _ in range(len(text))]
-        for pos, match in automaton.iter(text):
+        for pos, match in self.automaton.iter(text):
             word, entity_type = match
             i = pos - len(word) + 1
             if len(word) == 1:
@@ -42,7 +44,6 @@ def build_ac_tokenizer(dict_file):
             if len(word) > 1:
                 tags[i+len(word)-1].append(f"END_{entity_type}")
         return tags
-    return tokenize
 
 
 class NERDataset(data.Dataset):
@@ -107,7 +108,7 @@ def load_datasets(train_file, dev_file, use_bichar=False, dict_file=None,
     if dict_file is not None:
         use_lexicon = True
         nesting_field = data.Field(batch_first=True, tokenize=identity, unk_token=None)
-        Lexicon = data.NestedField(nesting_field, tokenize=build_ac_tokenizer(dict_file))
+        Lexicon = data.NestedField(nesting_field, tokenize=AcTokenizer(dict_file))
         fields.append(("Lexicon", Lexicon))
     else:
         use_lexicon = False

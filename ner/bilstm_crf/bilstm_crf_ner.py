@@ -8,11 +8,12 @@ import json
 
 
 class BilstmCrfNerTagger(NerTagger):
-    def __init__(self, model, Char, label_vocab, BiChar=None, device="cpu") -> None:
+    def __init__(self, model, Char, label_vocab, BiChar=None, Lexicon=None, device="cpu") -> None:
         super().__init__()
         self.model = model
         self.Char = Char
         self.BiChar = BiChar
+        self.Lexicon = Lexicon
         self.label_vocab = label_vocab
         self.device = device
 
@@ -20,11 +21,16 @@ class BilstmCrfNerTagger(NerTagger):
         chars = [self.Char.preprocess(text) for text in texts]
         char_tensors = self.Char.process(chars, device=self.device)
         if self.BiChar is not None:
-            bichars = [self.Char.preprocess(text) for text in texts]
-            bichar_tensors = self.Char.process(bichars, device=self.device)
+            bichars = [self.BiChar.preprocess(text) for text in texts]
+            bichar_tensors = self.BiChar.process(bichars, device=self.device)
         else:
             bichar_tensors = None
-        tags_list = self.model(char_tensors, bichars=bichar_tensors)
+        if self.Lexicon is not None:
+            lex_features = [self.Lexicon.preprocess(text) for text in texts]
+            lex_tensors = self.Lexicon.process(lex_features, device=self.device)
+        else:
+            lex_tensors = None
+        tags_list = self.model(char_tensors, bichars=bichar_tensors, lex_features=lex_tensors)
         tags = [[self.label_vocab[str(tag)] for tag in tags] for tags in tags_list]
         return tags
 
@@ -41,9 +47,15 @@ class BilstmCrfNerTagger(NerTagger):
                 BiChar = pickle.load(fi)
         else:
             BiChar = None
+        lex_file = os.path.join(model_dir, "Lexicon.pkl")
+        if os.path.exists(lex_file):
+            with open(lex_file, "rb") as fi:
+                Lexicon = pickle.load(fi)
+        else:
+            Lexicon = None
         with open(os.path.join(model_dir, "label_vocab.json"), encoding="utf-8") as fi:
             label_vocab = json.load(fi)
-        tagger= cls(model, Char, label_vocab, BiChar, device)
+        tagger= cls(model, Char, label_vocab, BiChar, Lexicon, device)
         return tagger
 
 

@@ -37,6 +37,11 @@ def prepare_parser():
     parser.add_argument("--use_bichar",
                         action='store_true',
                         help="Whether to use bichar features.")
+    
+    parser.add_argument("--dict_file",
+                        type=str,
+                        default=None,
+                        help="the path of dict")
 
     parser.add_argument("--batch_size",
                         default=32,
@@ -94,7 +99,8 @@ def train(model, train_data, optimizer, args):
             chars = batch.Char
             tags = batch.Tag
             bichars = None if not args.use_bichar else batch.BiChar
-            loss = model(chars, tags, bichars)
+            lex_features = None if args.dict_file is None else batch.Lexicon
+            loss = model(chars, tags, bichars, lex_features)
             loss.backward()
             optimizer.step()
             model.zero_grad()
@@ -111,7 +117,6 @@ def train(model, train_data, optimizer, args):
             pickle.dump(train_data.fields.get("BiChar"), fo)
     tag_vocab = train_data.fields.get("Tag").vocab
     tag_map = {i: tag for i, tag in enumerate(tag_vocab.itos)}
-    tag_map[tag_vocab.stoi["<unk>"]] = "O"
     tag_map[tag_vocab.stoi["<pad>"]] = "O"
     with open(os.path.join(args.output_dir, "label_vocab.json"), "w", encoding="utf-8") as fo:
         json.dump(tag_map, fo)
@@ -120,7 +125,6 @@ def train(model, train_data, optimizer, args):
 def test(model, eval_data, args):
     tag_vocab = eval_data.fields.get("Tag").vocab
     tag_map = {i: tag for i, tag in enumerate(tag_vocab.itos)}
-    tag_map[tag_vocab.stoi["<unk>"]] = "O"
     tag_map[tag_vocab.stoi["<pad>"]] = "O"
     data_iter = data.BucketIterator(eval_data, args.batch_size, device=args.device, sort=False, train=False)
     tbar = tqdm.tqdm(data_iter)
@@ -130,8 +134,9 @@ def test(model, eval_data, args):
     for batch in tbar:
         chars = batch.Char
         bichars = None if not args.use_bichar else batch.BiChar
+        lex_features = None if args.dict_file is None else batch.Lexicon
         tags_list = batch.Tag.cpu().numpy()
-        preds_list = model(chars, bichars=bichars)
+        preds_list = model(chars, bichars=bichars, lex_features=lex_features)
         all_true_labels.extend([[tag_map[tag] for tag in tags if tag != tag_vocab.stoi["<pad>"]] for tags in tags_list])
         all_pred_labels.extend([[tag_map[pred] for pred in preds] for preds in preds_list])
     evaluate(all_true_labels, all_pred_labels)
@@ -143,7 +148,8 @@ def main():
     data_dir = args.data_dir
     train_file = os.path.join(data_dir, "train.txt")
     dev_file = os.path.join(data_dir, "dev.txt")
-    train_data, dev_data = load_datasets(train_file, dev_file, use_bichar=args.use_bichar)
+    train_data, dev_data = load_datasets(train_file, dev_file, use_bichar=args.use_bichar, 
+        dict_file=args.dict_file)
     if args.do_train:
         Char = train_data.fields.get("Char")
         if args.use_bichar:
@@ -151,12 +157,17 @@ def main():
             bichar_vocab_size = len(BiChar.vocab)
         else:
             bichar_vocab_size = 0
+        if args.dict_file is not None:
+            Lexicon = train_data.fields.get("Lexicon")
+            lex_vocab_size = len(Lexicon.vocab)
+        else:
+            lex_vocab_size = 0
         Tag = train_data.fields.get("Tag")
         vocab_size = len(Char.vocab)
         num_tags = len(Tag.vocab)
         padding_idx = Char.vocab.stoi["<pad>"]
         model = BilstmCrfModel(vocab_size, args.emb_dims, args.hidden_dims, num_tags, padding_idx, 
-            args.dropout, args.use_bichar, bichar_vocab_size)
+            args.dropout, bichar_vocab_size, lex_vocab_size)
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
         model.to(args.device)
         train(model, train_data, optimizer, args)

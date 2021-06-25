@@ -49,34 +49,45 @@ class BilstmCrfNerTagger(NerTagger):
 
 class BilstmCrfModel(nn.Module):
     def __init__(self, vocab_size, emb_dims, hidden_dims, num_labels, padding_idx, dropout=0.3, 
-            use_bichar=False, bichar_vocab_size=0):
+            bichar_vocab_size=0, lex_vocab_size=0, lex_emb_dims=20):
         super().__init__()
         self.vocab_size = vocab_size
         self.num_labels = num_labels
         self.hidden_dims = hidden_dims
         self.padding_idx = padding_idx
         self.embedding = nn.Embedding(vocab_size, emb_dims, padding_idx=padding_idx)
-        if use_bichar:
+        input_dims = emb_dims
+        if bichar_vocab_size != 0:
             self.bichar_embedding = nn.Embedding(bichar_vocab_size, emb_dims, padding_idx)
-            self.bilstm = nn.LSTM(2*emb_dims, hidden_dims//2, num_layers=1, bidirectional=True, batch_first=True)
-        else:
-            self.bilstm = nn.LSTM(emb_dims, hidden_dims//2, num_layers=1, bidirectional=True, batch_first=True)
+            input_dims += emb_dims
+        if lex_vocab_size != 0:
+            self.lex_embedding = nn.Embedding(lex_vocab_size, lex_emb_dims, padding_idx=0)
+            input_dims += lex_emb_dims
+        self.bilstm = nn.LSTM(input_dims, hidden_dims//2, num_layers=1, bidirectional=True, batch_first=True)
         self.hidden2tags = nn.Linear(hidden_dims, num_labels)
         self.crf = CRF(num_labels, batch_first=True)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, chars, labels=None, bichars=None):
+    def forward(self, chars, labels=None, bichars=None, lex_features=None):
         """
         Args:
             chars (tensor): tensor with shape (batch_size, seq_len)
         """
         batch_size = chars.shape[0]
         embedded_chars = self.embedding(chars)
+        features = [embedded_chars]
         if bichars is not None:
             embedded_bichars = self.bichar_embedding(bichars)
-            embedded_chars = torch.cat([embedded_chars, embedded_bichars], dim=-1)
+            features.append(embedded_bichars)
+        if lex_features is not None:
+            embedded_lex = self.lex_embedding(lex_features).mean(dim=2)
+            features.append(embedded_lex)
+        if len(features) > 1:
+            embedded_features = torch.cat(features, dim=-1)
+        else:
+            embedded_features = features[0]
         hidden = self._init_hidden(batch_size, chars.device)
-        lstm_output, hidden = self.bilstm(embedded_chars, hidden)
+        lstm_output, hidden = self.bilstm(embedded_features, hidden)
         emissions = self.hidden2tags(self.dropout(lstm_output))
         mask = self._compute_mask(chars)
         if labels is not None:

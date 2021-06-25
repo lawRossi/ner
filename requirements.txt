@@ -4,3 +4,4 @@ transformers==2.4.1
 tqdm
 pytorch-crf
 seqeval
+torchtext==0.5.0

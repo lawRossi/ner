@@ -107,7 +107,7 @@ def load_datasets(train_file, dev_file, use_bichar=False, dict_file=None,
         fields.append(("BiChar", BiChar))
     if dict_file is not None:
         use_lexicon = True
-        nesting_field = data.Field(batch_first=True, tokenize=identity, unk_token=None)
+        nesting_field = data.Field(batch_first=True, tokenize=identity, unk_token=None, fix_length=3)
         Lexicon = data.NestedField(nesting_field, tokenize=AcTokenizer(dict_file))
         fields.append(("Lexicon", Lexicon))
     else:
@@ -123,12 +123,3 @@ def load_datasets(train_file, dev_file, use_bichar=False, dict_file=None,
     Tag.build_vocab(train_dataset)
 
     return train_dataset, dev_dataset
-
-
-# train, dev = load_datasets("data/train.txt", "data/dev.txt", dict_file="data/dict.csv")
-
-# data_iter = data.BucketIterator(train, 3)
-
-# for batch in data_iter:
-#     print(batch.Lexicon)
-#     break

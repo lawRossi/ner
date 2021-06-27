@@ -18,7 +18,7 @@ class BertForNER(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input_ids, token_type_ids, attention_mask, labels=None):
-        output = self.bert_model(input_ids, token_type_ids, attention_mask)
+        output = self.bert_model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
         hidden = output.last_hidden_state[:, 1:-1, :]  # drop [CLS] and [SEP]
         logits = self.hidden2tags(self.dropout(hidden))
         mask = self._compute_mask(input_ids)

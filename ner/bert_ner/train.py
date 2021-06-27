@@ -175,7 +175,7 @@ def main():
             lex_vocab_size = 0
         Tag = train_data.fields.get("Tag")
         num_tags = len(Tag.vocab)
-        model = BertForNER(args.model_name_or_path, num_tags)
+        model = BertForNER(args.model_name_or_path, num_tags, use_crf=args.use_crf)
         model.to(args.device)
         optimizer, scheduler = setup_optimizer(model, args, train_data)
         train(model, train_data, dev_data, optimizer, scheduler, args)

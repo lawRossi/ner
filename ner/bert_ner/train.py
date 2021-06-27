@@ -140,10 +140,10 @@ def test(model, eval_data, args):
         # lex_features = None if args.dict_file is None else batch.Lexicon
         tags_list = batch.Tag.cpu().numpy()
         preds_list = model(input_ids, token_type_ids, attention_mask)
-        if args.use_crf:
-            all_true_labels.extend([[tag_map[tag] for tag in tags if tag != tag_vocab.stoi["<pad>"]] for tags in tags_list])
-        else:
-            all_true_labels.extend([[tag_map[tag] for tag in tags] for tags in tags_list])
+        # if args.use_crf:
+        all_true_labels.extend([[tag_map[tag] for tag in tags if tag != tag_vocab.stoi["<pad>"]] for tags in tags_list])
+        # else:
+        #     all_true_labels.extend([[tag_map[tag] for tag in tags] for tags in tags_list])
         all_pred_labels.extend([[tag_map[pred] for pred in preds] for preds in preds_list])
     evaluate(all_true_labels, all_pred_labels)
 

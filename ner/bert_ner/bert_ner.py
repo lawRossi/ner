@@ -36,7 +36,12 @@ class BertForNER(nn.Module):
                 loss = self.loss(logits, labels)
                 return loss
             else:
-                return logits.argmax(dim=-1).cpu().detach().numpy()
+                tags_list = logits.argmax(dim=-1).cpu().detach().numpy()
+                tags = []
+                seq_lens = mask.cpu().numpy().sum(axis=1)
+                for i, tags_ in enumerate(tags_list):
+                    tags.append(tags_[:seq_lens[i]])
+                return tags
 
     def _compute_mask(self, input_ids):
         mask = input_ids != 0

@@ -102,7 +102,6 @@ def train(model, train_data, dev_data, optimizer, scheduler, args):
             if (i + 1) % 5 == 0:
                 tbar.set_postfix(loss=total_loss/5)
                 total_loss = 0
-            break
         if args.do_eval:
             test(model, dev_data, args)
     if not os.path.exists(args.output_dir):

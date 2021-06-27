@@ -1,6 +1,7 @@
 from torchtext import data
-from torchtext.data import field
-import ahocorasick
+from transformers.models.auto.tokenization_auto import AutoTokenizer
+# import ahocorasick
+import os.path
 
 
 def identity(x):
@@ -123,3 +124,107 @@ def load_datasets(train_file, dev_file, use_bichar=False, dict_file=None,
     Tag.build_vocab(train_dataset)
 
     return train_dataset, dev_dataset
+
+
+class TransformersTokenizer:
+    def __init__(self, model_name_or_path):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+
+    def __call__(self, text):
+        tokens = tokenize(text)
+        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        token_ids.insert(0, self.tokenizer.cls_token_id)
+        token_ids.append(self.tokenizer.sep_token_id)
+        token_type_ids = [0] * len(token_ids)
+        attention_mask = [1] * len(token_ids)
+        return {"input_ids": token_ids, "token_type_ids": token_type_ids, "attention_mask": attention_mask}
+
+
+class BertNERDataset(data.Dataset):
+    @staticmethod
+    def sort_key(example):
+        for attr in dir(example):
+            if not callable(getattr(example, attr)) and \
+                    not attr.startswith("__"):
+                return len(getattr(example, attr))
+        return 0
+
+    def __init__(self, path, fields, tokenizer, separator="\t", use_lexicon=False, **kwargs):
+        examples = []
+        columns = []
+        with open(path, encoding="utf-8") as input_file:
+            for line in input_file:
+                line = line.rstrip()
+                if line == "":
+                    if columns:
+                        if use_lexicon:
+                            self._add_lexicon_features(columns, fields)
+                        columns = self._convert_tokens(tokenizer, columns)
+                        examples.append(data.Example.fromlist(columns, fields))
+                    columns = []
+                else:
+                    for i, column in enumerate(line.split(separator)):
+                        if len(columns) < i + 1:
+                            columns.append([])
+                        columns[i].append(column)
+            if columns:
+                if use_lexicon:
+                    self._add_lexicon_features(columns, fields)
+                columns = self._convert_tokens(tokenizer, columns)
+                examples.append(data.Example.fromlist(columns, fields))
+        super().__init__(examples, fields, **kwargs)
+    
+    def _convert_tokens(self, tokenizer, columns):
+        text = "".join(columns[0])
+        result = tokenizer(text)
+        tags = columns[1]
+        return [result["input_ids"], result["token_type_ids"], result["attention_mask"], tags]
+
+
+def load_datasets_for_bert(data_dir, tokenizer, dict_file=None):
+    Token = data.Field(batch_first=True, use_vocab=False, unk_token=None, pad_token=0)
+    TokenType = data.Field(batch_first=True, use_vocab=False, unk_token=None, pad_token=0)
+    Mask = data.Field(batch_first=True, use_vocab=False, unk_token=None, pad_token=0)
+    Tag = data.Field(batch_first=True, is_target=True, unk_token=None)
+    fields = [("Token", Token), ("TokenType", TokenType), ("Mask", Mask), ("Tag", Tag)]
+    train_file = os.path.join(data_dir, "train.txt")
+    dev_file = os.path.join(data_dir, "dev.txt")
+    train_dataset = BertNERDataset(train_file, fields, tokenizer)
+    dev_dataset = BertNERDataset(dev_file, fields, tokenizer)
+    # Token.build_vocab(train_dataset)
+    # TokenType.build_vocab(train_dataset)
+    # Mask.build_vocab(train_dataset)
+    Tag.build_vocab(train_dataset)
+    return train_dataset, dev_dataset
+
+
+# def tokenize_and_align_labels(tokenizer, tokens, labels, label_all_tokens=True):
+#     tokenized_inputs = tokenizer(
+#         tokens,
+#         truncation=True,
+#         # We use this argument because the texts in our dataset are lists of words
+#         #  (with a label for each word).
+#         is_split_into_words=True,
+#     )
+#     new_labels = []
+#     word_ids = tokenized_inputs.word_ids(batch_index=0)
+#     previous_word_idx = None
+#     label_ids = []
+#     for word_idx in word_ids:
+#         # Special tokens have a word id that is None. We set the label to "<pad>" 
+#         # so they are automatically ignored in the loss function.
+#         if word_idx is None:
+#             new_labels.append("<pad>")
+#         # We set the label for the first token of each word.
+#         elif word_idx != previous_word_idx:
+#             label_ids.append(labels[word_idx]])
+#         # For the other tokens in a word, we set the label to either the current label or <pad>,
+#         # depending on the label_all_tokens flag.
+#         else:
+#             label_ids.append(labels[word_idx] if label_all_tokens else "<pad>")
+#         previous_word_idx = word_idx
+
+#     tokenized_inputs["labels"] = labels
+#     return tokenized_inputs
+
+

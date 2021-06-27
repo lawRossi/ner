@@ -1,20 +1,27 @@
 import argparse
-from ner.bilstm_crf.bilstm_crf_ner import BilstmCrfModel
-from ..dataset_util import load_datasets
-import os.path
+from ner.bert_ner.bert_ner import BertForNER
+from ..dataset_util import BertNERDataset, load_datasets_for_bert, TransformersTokenizer
+import os
 from torchtext import data
-from torch.optim import Adam
+from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import tqdm
 import torch
 from ..ner_evaluate import evaluate
 import json
 import pickle
+import math
 
 
 def prepare_parser():
     parser = argparse.ArgumentParser()
 
     ## Required parameters
+    parser.add_argument("--model_name_or_path",
+                        default=None,
+                        type=str,
+                        required=True,
+                        help="specify which model to use.")
+
     parser.add_argument("--data_dir",
                         default=None,
                         type=str,
@@ -33,10 +40,10 @@ def prepare_parser():
     parser.add_argument("--do_eval",
                         action='store_true',
                         help="Whether to run eval on the dev set.")
-    
-    parser.add_argument("--use_bichar",
+
+    parser.add_argument("--use_crf",
                         action='store_true',
-                        help="Whether to use bichar features.")
+                        help="Whether to use crf layer.")
     
     parser.add_argument("--dict_file",
                         type=str,
@@ -48,26 +55,20 @@ def prepare_parser():
                         type=int,
                         help="Total batch size for training.")
 
-    parser.add_argument("--emb_dims",
-                        default=100,
-                        type=int,
-                        help="embedding dimentions")
-
-    parser.add_argument("--hidden_dims",
-                        default=100,
-                        type=int,
-                        help="hidden dimentions")
-
     parser.add_argument("--learning_rate",
                         default=5e-5,
                         type=float,
                         help="The initial learning rate for Adam.")
 
     parser.add_argument("--num_train_epochs",
-                        default=3,
+                        default=1,
                         type=int,
                         help="Total number of training epochs to perform.")
-    
+
+    parser.add_argument("--warmup_proportion", default=0.1, type=float,
+                        help="Proportion of training to perform linear learning rate warmup for. "
+                             "E.g., 0.1 = 10%% of training.")
+
     parser.add_argument("--dropout",
                         default=0.3,
                         type=float,
@@ -80,38 +81,43 @@ def prepare_parser():
     return parser
 
 
-def train(model, train_data, optimizer, args):
+def train(model, train_data, dev_data, optimizer, scheduler, args):
     data_iter = data.BucketIterator(train_data, args.batch_size, shuffle=True, device=args.device)
     for _ in tqdm.trange(args.num_train_epochs):
         model.train()
         total_loss = 0
         tbar = tqdm.tqdm(data_iter)
         for i, batch in enumerate(tbar):
-            chars = batch.Char
+            input_ids = batch.Token
+            token_type_ids = batch.TokenType
+            attention_mask = batch.Mask
             tags = batch.Tag
-            bichars = None if not args.use_bichar else batch.BiChar
-            lex_features = None if args.dict_file is None else batch.Lexicon
-            loss = model(chars, tags, bichars, lex_features)
+            # lex_features = None if args.dict_file is None else batch.Lexicon
+            loss = model(input_ids, token_type_ids, attention_mask, tags)
             loss.backward()
             optimizer.step()
+            scheduler.step()
             model.zero_grad()
             total_loss += loss.item()
-            if (i + 1) % 50 == 0:
-                tbar.set_postfix(loss=total_loss/50)
+            if (i + 1) % 5 == 0:
+                tbar.set_postfix(loss=total_loss/5)
                 total_loss = 0
-    model_path = os.path.join(args.output_dir, "bilstm_crf.pt")
+            break
+        if args.do_eval:
+            test(model, dev_data, args)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    model_path = os.path.join(args.output_dir, "bert_ner.pt")
     torch.save(model, model_path)
-    with open(os.path.join(args.output_dir, "Char.pkl"), "wb") as fo:
-        pickle.dump(train_data.fields.get("Char"), fo)
-    if args.use_bichar:
-        with open(os.path.join(args.output_dir, "BiChar.pkl"), "wb") as fo:
-            pickle.dump(train_data.fields.get("BiChar"), fo)
+
     if args.dict_file is not None:
         with open(os.path.join(args.output_dir, "Lexicon.pkl"), "wb") as fo:
             Lexicon = train_data.fields.get("Lexicon")
             Lexicon.tokenize = None
             pickle.dump(Lexicon, fo)
-        torch.save(args, os.path.join(args.output_dir, "args.pkl"))
+
+    torch.save(args, os.path.join(args.output_dir, "args.pkl"))
+
     tag_vocab = train_data.fields.get("Tag").vocab
     tag_map = {i: tag for i, tag in enumerate(tag_vocab.itos)}
     tag_map[tag_vocab.stoi["<pad>"]] = "O"
@@ -129,50 +135,51 @@ def test(model, eval_data, args):
     all_pred_labels = []
     all_true_labels = []
     for batch in tbar:
-        chars = batch.Char
-        bichars = None if not args.use_bichar else batch.BiChar
-        lex_features = None if args.dict_file is None else batch.Lexicon
+        input_ids = batch.Token
+        token_type_ids = batch.TokenType
+        attention_mask = batch.Mask
+        # lex_features = None if args.dict_file is None else batch.Lexicon
         tags_list = batch.Tag.cpu().numpy()
-        preds_list = model(chars, bichars=bichars, lex_features=lex_features)
-        all_true_labels.extend([[tag_map[tag] for tag in tags if tag != tag_vocab.stoi["<pad>"]] for tags in tags_list])
+        preds_list = model(input_ids, token_type_ids, attention_mask)
+        if args.use_crf:
+            all_true_labels.extend([[tag_map[tag] for tag in tags if tag != tag_vocab.stoi["<pad>"]] for tags in tags_list])
+        else:
+            all_true_labels.extend([[tag_map[tag] for tag in tags] for tags in tags_list])
         all_pred_labels.extend([[tag_map[pred] for pred in preds] for preds in preds_list])
     evaluate(all_true_labels, all_pred_labels)
+
+
+def setup_optimizer(model, args, dataset):
+    no_decay = ['bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    ]
+    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
+    num_train_steps = math.ceil(len(dataset) * args.num_train_epochs / args.batch_size)
+    num_warmup_steps = int(args.warmup_proportion * num_train_steps)
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps, num_train_steps)
+    return optimizer, scheduler
 
 
 def main():
     parser = prepare_parser()
     args = parser.parse_args()
     data_dir = args.data_dir
-    train_file = os.path.join(data_dir, "train.txt")
-    dev_file = os.path.join(data_dir, "dev.txt")
-    train_data, dev_data = load_datasets(train_file, dev_file, use_bichar=args.use_bichar, 
-        dict_file=args.dict_file)
+    tokenizer = TransformersTokenizer(args.model_name_or_path)
+    train_data, dev_data = load_datasets_for_bert(data_dir, tokenizer, args.dict_file)
     if args.do_train:
-        Char = train_data.fields.get("Char")
-        if args.use_bichar:
-            BiChar = train_data.fields.get("BiChar")
-            bichar_vocab_size = len(BiChar.vocab)
-        else:
-            bichar_vocab_size = 0
         if args.dict_file is not None:
             Lexicon = train_data.fields.get("Lexicon")
             lex_vocab_size = len(Lexicon.vocab)
         else:
             lex_vocab_size = 0
         Tag = train_data.fields.get("Tag")
-        vocab_size = len(Char.vocab)
         num_tags = len(Tag.vocab)
-        padding_idx = Char.vocab.stoi["<pad>"]
-        model = BilstmCrfModel(vocab_size, args.emb_dims, args.hidden_dims, num_tags, padding_idx, 
-            args.dropout, bichar_vocab_size, lex_vocab_size)
-        optimizer = Adam(model.parameters(), lr=args.learning_rate)
+        model = BertForNER(args.model_name_or_path, num_tags)
         model.to(args.device)
-        train(model, train_data, optimizer, args)
-    if args.do_eval:
-        model_path = os.path.join(args.output_dir, "bilstm_crf.pt")
-        model = torch.load(model_path, map_location=args.device)
-        test(model, dev_data, args)
-
+        optimizer, scheduler = setup_optimizer(model, args, train_data)
+        train(model, train_data, dev_data, optimizer, scheduler, args)
 
 if __name__ == "__main__":
     main()

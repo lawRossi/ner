@@ -103,13 +103,13 @@ class BilstmCrfModel(nn.Module):
             embedded_features = features[0]
         hidden = self._init_hidden(batch_size, chars.device)
         lstm_output, hidden = self.bilstm(embedded_features, hidden)
-        emissions = self.hidden2tags(self.dropout(lstm_output))
+        logits = self.hidden2tags(self.dropout(lstm_output))
         mask = self._compute_mask(chars)
         if labels is not None:
-            log_likelihood = self.crf(emissions, labels, mask=mask)
+            log_likelihood = self.crf(logits, labels, mask=mask)
             return -log_likelihood
         else:
-            tags = self.crf.decode(emissions, mask=mask)
+            tags = self.crf.decode(logits, mask=mask)
             return tags
 
     def _compute_mask(self, sequences):

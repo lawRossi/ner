@@ -19,7 +19,7 @@ class BertForNER(nn.Module):
 
     def forward(self, input_ids, token_type_ids, attention_mask, labels=None):
         output = self.bert_model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
-        hidden = output.last_hidden_state[:, 1:-1, :]  # drop [CLS] and [SEP]
+        hidden = output.last_hidden_state
         logits = self.hidden2tags(self.dropout(hidden))
         mask = self._compute_mask(input_ids)
         if self.use_crf:
@@ -45,5 +45,5 @@ class BertForNER(nn.Module):
 
     def _compute_mask(self, input_ids):
         mask = input_ids != 0
-        mask = mask[:, 1:-1]  # drop mssk for [CLS] and [SEP]
         return mask
+ 

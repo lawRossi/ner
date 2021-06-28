@@ -1,6 +1,6 @@
 import argparse
 from ner.bert_ner.bert_ner import BertForNER
-from ..dataset_util import BertNERDataset, load_datasets_for_bert, TransformersTokenizer
+from ..dataset_util import load_datasets_for_bert, TransformersTokenizer
 import os
 from torchtext import data
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
@@ -10,6 +10,7 @@ from ..ner_evaluate import evaluate
 import json
 import pickle
 import math
+from sklearn.metrics import classification_report
 
 
 def prepare_parser():
@@ -140,12 +141,16 @@ def test(model, eval_data, args):
         # lex_features = None if args.dict_file is None else batch.Lexicon
         tags_list = batch.Tag.cpu().numpy()
         preds_list = model(input_ids, token_type_ids, attention_mask)
-        # if args.use_crf:
-        all_true_labels.extend([[tag_map[tag] for tag in tags if tag != tag_vocab.stoi["<pad>"]] for tags in tags_list])
-        # else:
-        #     all_true_labels.extend([[tag_map[tag] for tag in tags] for tags in tags_list])
+        
+        all_true_labels.extend([[tag_map[tag] for tag in tags if tag != 0] for tags in tags_list])
         all_pred_labels.extend([[tag_map[pred] for pred in preds] for preds in preds_list])
+    
     evaluate(all_true_labels, all_pred_labels)
+
+    # from itertools import chain
+    # labels = list(chain.from_iterable(all_true_labels))
+    # preds = list(chain.from_iterable(all_pred_labels))
+    # print(classification_report(labels, preds))
 
 
 def setup_optimizer(model, args, dataset):

@@ -159,7 +159,7 @@ class BertNERDataset(data.Dataset):
                     if columns:
                         if use_lexicon:
                             self._add_lexicon_features(columns, fields)
-                        columns = self._convert_tokens(tokenizer, columns)
+                        columns = self._convert_input(tokenizer, columns)
                         examples.append(data.Example.fromlist(columns, fields))
                     columns = []
                 else:
@@ -170,14 +170,14 @@ class BertNERDataset(data.Dataset):
             if columns:
                 if use_lexicon:
                     self._add_lexicon_features(columns, fields)
-                columns = self._convert_tokens(tokenizer, columns)
+                columns = self._convert_input(tokenizer, columns)
                 examples.append(data.Example.fromlist(columns, fields))
         super().__init__(examples, fields, **kwargs)
-    
-    def _convert_tokens(self, tokenizer, columns):
+
+    def _convert_input(self, tokenizer, columns):
         text = "".join(columns[0])
         result = tokenizer(text)
-        tags = columns[1]
+        tags =  ["O"] + columns[1] + ["O"]   # add label for [CLS] and [SEP]
         return [result["input_ids"], result["token_type_ids"], result["attention_mask"], tags]
 
 

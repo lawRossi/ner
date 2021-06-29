@@ -10,7 +10,6 @@ from ..ner_evaluate import evaluate
 import json
 import pickle
 import math
-from sklearn.metrics import classification_report
 
 
 def prepare_parser():
@@ -105,11 +104,17 @@ def train(model, train_data, dev_data, optimizer, scheduler, args):
                 total_loss = 0
         if args.do_eval:
             test(model, dev_data, args)
+    save_model(model, args, train_data)
+    
+
+def save_model(model, args, train_data):
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
     model_path = os.path.join(args.output_dir, "bert_ner.pt")
-    torch.save(model, model_path)
+    model.bert_model.config.save_pretrained(args.output_dir)
+    model.tokenizer.save_pretrained(args.output_dir)
 
+    torch.save(model, model_path)
     if args.dict_file is not None:
         with open(os.path.join(args.output_dir, "Lexicon.pkl"), "wb") as fo:
             Lexicon = train_data.fields.get("Lexicon")

@@ -8,60 +8,6 @@ import os.path
 import json
 
 
-class BilstmCrfNerTagger(NerTagger):
-    def __init__(self, model, Char, label_vocab, BiChar=None, Lexicon=None, device="cpu") -> None:
-        super().__init__()
-        self.model = model
-        self.Char = Char
-        self.BiChar = BiChar
-        self.Lexicon = Lexicon
-        self.label_vocab = label_vocab
-        self.device = device
-
-    def predict_batch(self, texts):
-        chars = [self.Char.preprocess(text) for text in texts]
-        char_tensors = self.Char.process(chars, device=self.device)
-        if self.BiChar is not None:
-            bichars = [self.BiChar.preprocess(text) for text in texts]
-            bichar_tensors = self.BiChar.process(bichars, device=self.device)
-        else:
-            bichar_tensors = None
-        if self.Lexicon is not None:
-            lex_features = [self.Lexicon.preprocess(text) for text in texts]
-            lex_tensors = self.Lexicon.process(lex_features, device=self.device)
-        else:
-            lex_tensors = None
-        tags_list = self.model(char_tensors, bichars=bichar_tensors, lex_features=lex_tensors)
-        tags = [[self.label_vocab[str(tag)] for tag in tags] for tags in tags_list]
-        return tags
-
-    @classmethod
-    def load_model(cls, model_dir, device="cpu"):
-        model_path = os.path.join(model_dir, "bilstm_crf.pt")
-        model = torch.load(model_path, map_location=device)
-        model.eval()
-        with open(os.path.join(model_dir, "Char.pkl"), "rb") as fi:
-            Char = pickle.load(fi)
-        bichar_file = os.path.join(model_dir, "BiChar.pkl")
-        if os.path.exists(bichar_file):
-            with open(bichar_file, "rb") as fi:
-                BiChar = pickle.load(fi)
-        else:
-            BiChar = None
-        lex_file = os.path.join(model_dir, "Lexicon.pkl")
-        if os.path.exists(lex_file):
-            with open(lex_file, "rb") as fi:
-                Lexicon = pickle.load(fi)
-            args = torch.load(os.path.join(model_dir, "args.pkl"))
-            Lexicon.tokenize = AcTokenizer(args.dict_file)
-        else:
-            Lexicon = None
-        with open(os.path.join(model_dir, "label_vocab.json"), encoding="utf-8") as fi:
-            label_vocab = json.load(fi)
-        tagger= cls(model, Char, label_vocab, BiChar, Lexicon, device)
-        return tagger
-
-
 class BilstmCrfModel(nn.Module):
     def __init__(self, vocab_size, emb_dims, hidden_dims, num_labels, padding_idx, dropout=0.3, 
             bichar_vocab_size=0, lex_vocab_size=0, lex_emb_dims=20):
@@ -118,6 +64,61 @@ class BilstmCrfModel(nn.Module):
     def _init_hidden(self, batch_size, device):
         return (torch.zeros(2, batch_size, self.hidden_dims // 2, device=device),
                 torch.zeros(2, batch_size, self.hidden_dims // 2, device=device))
+
+
+
+class BilstmCrfNerTagger(NerTagger):
+    def __init__(self, model, Char, label_vocab, BiChar=None, Lexicon=None, device="cpu") -> None:
+        super().__init__()
+        self.model = model
+        self.Char = Char
+        self.BiChar = BiChar
+        self.Lexicon = Lexicon
+        self.label_vocab = label_vocab
+        self.device = device
+
+    def predict_batch(self, texts):
+        chars = [self.Char.preprocess(text) for text in texts]
+        char_tensors = self.Char.process(chars, device=self.device)
+        if self.BiChar is not None:
+            bichars = [self.BiChar.preprocess(text) for text in texts]
+            bichar_tensors = self.BiChar.process(bichars, device=self.device)
+        else:
+            bichar_tensors = None
+        if self.Lexicon is not None:
+            lex_features = [self.Lexicon.preprocess(text) for text in texts]
+            lex_tensors = self.Lexicon.process(lex_features, device=self.device)
+        else:
+            lex_tensors = None
+        tags_list = self.model(char_tensors, bichars=bichar_tensors, lex_features=lex_tensors)
+        tags = [[self.label_vocab[str(tag)] for tag in tags] for tags in tags_list]
+        return tags
+
+    @classmethod
+    def load_model(cls, model_dir, device="cpu"):
+        model_path = os.path.join(model_dir, "bilstm_crf.pt")
+        model = torch.load(model_path, map_location=device)
+        model.eval()
+        with open(os.path.join(model_dir, "Char.pkl"), "rb") as fi:
+            Char = pickle.load(fi)
+        bichar_file = os.path.join(model_dir, "BiChar.pkl")
+        if os.path.exists(bichar_file):
+            with open(bichar_file, "rb") as fi:
+                BiChar = pickle.load(fi)
+        else:
+            BiChar = None
+        lex_file = os.path.join(model_dir, "Lexicon.pkl")
+        if os.path.exists(lex_file):
+            with open(lex_file, "rb") as fi:
+                Lexicon = pickle.load(fi)
+            args = torch.load(os.path.join(model_dir, "args.pkl"))
+            Lexicon.tokenize = AcTokenizer(args.dict_file)
+        else:
+            Lexicon = None
+        with open(os.path.join(model_dir, "label_vocab.json"), encoding="utf-8") as fi:
+            label_vocab = json.load(fi)
+        tagger= cls(model, Char, label_vocab, BiChar, Lexicon, device)
+        return tagger
 
 
 if __name__ == "__main__":

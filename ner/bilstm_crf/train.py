@@ -80,7 +80,7 @@ def prepare_parser():
     return parser
 
 
-def train(model, train_data, optimizer, args):
+def train(model, train_data, dev_data, optimizer, args):
     data_iter = data.BucketIterator(train_data, args.batch_size, shuffle=True, device=args.device)
     for _ in tqdm.trange(args.num_train_epochs):
         model.train()
@@ -99,6 +99,12 @@ def train(model, train_data, optimizer, args):
             if (i + 1) % 50 == 0:
                 tbar.set_postfix(loss=total_loss/50)
                 total_loss = 0
+        if args.do_eval:
+            test(model, dev_data, args)
+    save_model(model, args, train_data)
+
+
+def save_model(model, args, train_data):
     model_path = os.path.join(args.output_dir, "bilstm_crf.pt")
     torch.save(model, model_path)
     with open(os.path.join(args.output_dir, "Char.pkl"), "wb") as fo:
@@ -125,7 +131,7 @@ def test(model, eval_data, args):
     tag_map[tag_vocab.stoi["<pad>"]] = "O"
     data_iter = data.BucketIterator(eval_data, args.batch_size, device=args.device, sort=False, train=False)
     tbar = tqdm.tqdm(data_iter)
-    model = model.eval()
+    model.eval()
     all_pred_labels = []
     all_true_labels = []
     for batch in tbar:
@@ -167,11 +173,7 @@ def main():
             args.dropout, bichar_vocab_size, lex_vocab_size)
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
         model.to(args.device)
-        train(model, train_data, optimizer, args)
-    if args.do_eval:
-        model_path = os.path.join(args.output_dir, "bilstm_crf.pt")
-        model = torch.load(model_path, map_location=args.device)
-        test(model, dev_data, args)
+        train(model, train_data, dev_data, optimizer, args)
 
 
 if __name__ == "__main__":

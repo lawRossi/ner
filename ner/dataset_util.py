@@ -11,6 +11,7 @@ def identity(x):
 def tokenize(text):
     return list(text)
 
+
 def tokenize_bichar(text):
     bichars = [text[i:i+2] for i in range(len(text)-1)]
     bichars.append(text[-1] + "<eos>")
@@ -191,40 +192,5 @@ def load_datasets_for_bert(data_dir, tokenizer, dict_file=None):
     dev_file = os.path.join(data_dir, "dev.txt")
     train_dataset = BertNERDataset(train_file, fields, tokenizer)
     dev_dataset = BertNERDataset(dev_file, fields, tokenizer)
-    # Token.build_vocab(train_dataset)
-    # TokenType.build_vocab(train_dataset)
-    # Mask.build_vocab(train_dataset)
     Tag.build_vocab(train_dataset)
     return train_dataset, dev_dataset
-
-
-# def tokenize_and_align_labels(tokenizer, tokens, labels, label_all_tokens=True):
-#     tokenized_inputs = tokenizer(
-#         tokens,
-#         truncation=True,
-#         # We use this argument because the texts in our dataset are lists of words
-#         #  (with a label for each word).
-#         is_split_into_words=True,
-#     )
-#     new_labels = []
-#     word_ids = tokenized_inputs.word_ids(batch_index=0)
-#     previous_word_idx = None
-#     label_ids = []
-#     for word_idx in word_ids:
-#         # Special tokens have a word id that is None. We set the label to "<pad>" 
-#         # so they are automatically ignored in the loss function.
-#         if word_idx is None:
-#             new_labels.append("<pad>")
-#         # We set the label for the first token of each word.
-#         elif word_idx != previous_word_idx:
-#             label_ids.append(labels[word_idx]])
-#         # For the other tokens in a word, we set the label to either the current label or <pad>,
-#         # depending on the label_all_tokens flag.
-#         else:
-#             label_ids.append(labels[word_idx] if label_all_tokens else "<pad>")
-#         previous_word_idx = word_idx
-
-#     tokenized_inputs["labels"] = labels
-#     return tokenized_inputs
-
-

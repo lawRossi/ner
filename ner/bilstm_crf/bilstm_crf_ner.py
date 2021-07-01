@@ -111,16 +111,11 @@ class BilstmCrfNerTagger(NerTagger):
         if os.path.exists(lex_file):
             with open(lex_file, "rb") as fi:
                 Lexicon = pickle.load(fi)
-            args = torch.load(os.path.join(model_dir, "args.pkl"))
-            Lexicon.tokenize = AcTokenizer(args.dict_file)
+            dict_file = os.path.join(model_dir, "dict.csv")
+            Lexicon.tokenize = AcTokenizer(dict_file)
         else:
             Lexicon = None
         with open(os.path.join(model_dir, "label_vocab.json"), encoding="utf-8") as fi:
             label_vocab = json.load(fi)
         tagger= cls(model, Char, label_vocab, BiChar, Lexicon, device)
         return tagger
-
-
-if __name__ == "__main__":
-    tagger = BilstmCrfNerTagger.load_model("output")
-    print(tagger.recognize_nes("巴萨下场比赛什么时候"))

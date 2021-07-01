@@ -8,6 +8,17 @@ def load(path):
 
 
 def augment(sample, lookup_tables, aug_num):
+    """数据扩充。
+    找到文本里标注的每个实体，随机替换成同类型的其他实体。
+
+    Args:
+        sample (str): 带标注的文本样本
+        lookup_tables (dict): 实体类型与实体列表的映射
+        aug_num (int): 每个实体扩充的个数
+
+    Returns:
+        list: 扩充后的样本
+    """
     p = re.compile("\[(?P<word>.+?)\]\((?P<type>.+?)\)")
     new_samples = []
     for _ in range(aug_num):
@@ -34,6 +45,22 @@ def augment(sample, lookup_tables, aug_num):
 
 
 def generate_augment_data(source_path, save_path, lookup_paths, aug_num=3):
+    """生成扩充数据
+
+    Args:
+        source_path (str)): 待扩充的标注文本文件
+        save_path (str): 保存结果的文件
+        lookup_paths (dict): 实体类型与实体文件的映射
+        aug_num (int, optional): 每个实体扩充的个数
+    
+    Examples:
+
+        lookup_paths = {
+            "person": "data/persons.txt",
+            "country": "data/countries.txt",
+        }
+        generate_augment_data("data/text.md", "data/aug_text.md", lookup_paths, 5)
+    """
     lookup_tables = {}
     for key, path in lookup_paths.items():
         lookup_tables[key] = load(path)
@@ -45,13 +72,3 @@ def generate_augment_data(source_path, save_path, lookup_paths, aug_num=3):
             for new_sample in augment(sample, lookup_tables, aug_num):
                 fo.write(new_sample)
                 fo.write("\n")
-
-
-if __name__ == "__main__":
-    lookup_paths = {
-        "player": "data/players.txt",
-        "team": "data/teams.txt",
-        "league": "data/leagues.txt"
-    }
-    # generate_augment_data("data/train.md", "data/aug_train.md", lookup_paths, 5)
-    generate_augment_data("data/dev.md", "data/aug_dev.md", lookup_paths, 5)

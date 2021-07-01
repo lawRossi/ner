@@ -1,13 +1,18 @@
 # -*- coding:utf-8 -*-
-import codecs
 import re
 
 
-def brat_to_conll(src_file_frefix, save_file):
-    with codecs.open(src_file_frefix+'.txt', encoding='utf-8') as fi:
+def brat2conll(src_file_frefix, save_file):
+    """Brat标注方式转化为Conll标注方式
+
+    Args:
+        src_file_frefix (str): Brat标注方式有两个文件，这个参数指定文件的前缀
+        save_file (str): 保留转化结果的文件
+    """
+    with open(src_file_frefix+'.txt', encoding='utf-8') as fi:
         text = fi.read().strip()
     annotation = ['O'] * len(text)
-    with codecs.open(src_file_frefix+'.ann', encoding='utf-8') as fi:
+    with open(src_file_frefix+'.ann', encoding='utf-8') as fi:
         prev_start = -1
         prev_end = -1
         for line in fi:
@@ -23,45 +28,14 @@ def brat_to_conll(src_file_frefix, save_file):
             annotation[end-1] = 'E_%s' % _type
             prev_start = start
             prev_end = end
-    with codecs.open(save_file, 'w', encoding='utf-8') as fo:
+    with open(save_file, 'w', encoding='utf-8') as fo:
+        assert len(text) == len(annotation)
         for chr, tag in zip(text, annotation):
             if chr == '\n':
                 fo.write('\n')
                 continue
             else:
                 fo.write('%s\t%s\n' % (chr, tag))
-
-
-def ann2conll(text, anns):
-    annotation = ['O'] * len(text)
-    prev_start = -1
-    prev_end = -1
-    for ann in anns:
-        splits = ann.split('\t')
-        [_type, start, end] = splits[1].split(" ")
-        start = int(start)
-        end = int(end)
-        if prev_start <= start and end <= prev_end:  # overlap
-            continue
-        annotation[start] = 'B_%s' % _type
-        for i in range(start + 1, end - 1):
-            annotation[i] = 'I_%s' % _type
-        annotation[end - 1] = 'E_%s' % _type
-        prev_start = start
-        prev_end = end
-    return annotation
-
-
-def parse_ann_file(path):
-    with codecs.open(path, encoding='utf-8') as fi:
-        entity_dict = {}
-        for line in fi:
-            splits = line.strip().split('\t')
-            if len(splits) == 3:
-                entity = splits[2]
-                splits = splits[1].split(' ')
-                entity_dict[entity] = splits[0]
-        return entity_dict
 
 
 def markdown2conll(source_path, save_path):
@@ -89,7 +63,7 @@ def markdown2conll(source_path, save_path):
             fo.write("\n")
 
 
-def conll2ann(source_path, save_path_prefix):
+def conll2brat(source_path, save_path_prefix):
     with open(source_path, encoding="utf-8") as fi:
         text = []
         anns = []
@@ -161,10 +135,3 @@ def conll2markdown(source_path, save_path):
                     type_ = splits[1][2:]
                     sentence.extend(f"[{splits[0]}]({type_})")
                     entity = []
-
-
-if __name__ == '__main__':
-    markdown2conll("data/aug_train.md", "data/train.txt")
-    markdown2conll("data/aug_dev.md", "data/dev.txt")
-    # conll2ann("../data/test.conll", "../data/test")
-    # conll2markdown("../data/test.conll", "../data/test.markdown")

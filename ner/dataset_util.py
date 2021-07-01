@@ -1,6 +1,6 @@
 from torchtext import data
 from transformers.models.auto.tokenization_auto import AutoTokenizer
-# import ahocorasick
+import ahocorasick
 import os.path
 
 

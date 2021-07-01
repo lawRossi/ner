@@ -99,8 +99,8 @@ def train(model, train_data, dev_data, optimizer, scheduler, args):
             scheduler.step()
             model.zero_grad()
             total_loss += loss.item()
-            if (i + 1) % 5 == 0:
-                tbar.set_postfix(loss=total_loss/5)
+            if (i + 1) % 20 == 0:
+                tbar.set_postfix(loss=total_loss/20)
                 total_loss = 0
         if args.do_eval:
             test(model, dev_data, args)

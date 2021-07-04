@@ -21,6 +21,8 @@ class NerTagger():
         Returns:
             list: 识别到的实体列表
         """
+        if not text:
+            return []
         tags = self.predict(text)
         nes = []
         ne = []
